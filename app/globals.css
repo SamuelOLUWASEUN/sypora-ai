@@ -16,6 +16,10 @@
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
 
+  /* Fix for mobile browser viewport height (address bar causes h-screen to be
+     too tall). dvh units are used on the dashboard root to correctly size
+     to the visible viewport area. Supported in all modern mobile browsers. */
+
   /* When this class is on <html>, every transition is killed instantly.
      ThemeProvider adds it for one frame during a theme switch so the dark/light
      change is instantaneous (no laggy color sweep across every element), then

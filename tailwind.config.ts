@@ -9,6 +9,12 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      height: {
+        "screen-dvh": "100dvh",
+      },
+      minHeight: {
+        "screen-dvh": "100dvh",
+      },
       fontFamily: {
         display: ["'Fraunces'", "serif"],
         body: ["'Cabinet Grotesk'", "sans-serif"],

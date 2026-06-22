@@ -282,7 +282,8 @@ export default function DashboardPage() {
   const connectedTools = integrations.filter(i => i.connected);
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] ?? "there";
 return (
-    <div className="flex h-screen bg-cream-50 dark:bg-navy-950 overflow-hidden">
+    <div className="flex h-screen h-screen-dvh bg-cream-50 dark:bg-navy-950 overflow-hidden"
+      style={{ height: "100dvh" }}>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
