@@ -10,38 +10,23 @@ type ThemeStore = {
   setHasHydrated: (state: boolean) => void;
 };
 
+// NOTE: This store only manages STATE. It never touches the DOM class.
+// ThemeProvider is the single source of truth for applying the `dark` class,
+// which avoids two code paths writing the class at once (the cause of the
+// flash when toggling).
 export const useThemeStore = create<ThemeStore>()(
   persist(
     (set, get) => ({
       theme: "light",
       hasHydrated: false,
-      toggleTheme: () => {
-        const next = get().theme === "light" ? "dark" : "light";
-        set({ theme: next });
-        if (typeof document !== "undefined") {
-          document.documentElement.classList.toggle("dark", next === "dark");
-        }
-      },
-      setTheme: (theme) => {
-        set({ theme });
-        if (typeof document !== "undefined") {
-          document.documentElement.classList.toggle("dark", theme === "dark");
-        }
-      },
+      toggleTheme: () => set({ theme: get().theme === "light" ? "dark" : "light" }),
+      setTheme: (theme) => set({ theme }),
       setHasHydrated: (state) => set({ hasHydrated: state }),
     }),
     {
       name: "nexus-theme",
-      // Only apply the persisted value to the DOM once Zustand has actually
-      // rehydrated client-side — prevents a mismatch with the server-rendered
-      // HTML (which always starts from the "light" default).
       onRehydrateStorage: () => (state) => {
-        if (state) {
-          state.setHasHydrated(true);
-          if (typeof document !== "undefined") {
-            document.documentElement.classList.toggle("dark", state.theme === "dark");
-          }
-        }
+        if (state) state.setHasHydrated(true);
       },
     }
   )

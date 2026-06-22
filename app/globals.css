@@ -16,6 +16,14 @@
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
 
+  /* When this class is on <html>, every transition is killed instantly.
+     ThemeProvider adds it for one frame during a theme switch so the dark/light
+     change is instantaneous (no laggy color sweep across every element), then
+     removes it so normal hover/focus transitions keep working. */
+  .theme-switching * {
+    transition: none !important;
+  }
+
   body {
     @apply bg-cream-50 text-navy-900 font-body antialiased;
     transition: background-color 0.3s, color 0.3s;
