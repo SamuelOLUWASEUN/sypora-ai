@@ -535,27 +535,27 @@ return (
         </div>
 
         {/* Messages */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 sm:py-6">
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.length === 0 && !loading && (
-              <div className="text-center py-4 sm:py-8">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-navy-50 dark:bg-navy-800 border border-navy-100 dark:border-navy-700 flex items-center justify-center mx-auto mb-4">
-                  <svg width="24" height="24" viewBox="0 0 18 18" fill="none">
+              <div className="text-center pt-2 pb-4 sm:py-8">
+                <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-navy-50 dark:bg-navy-800 border border-navy-100 dark:border-navy-700 flex items-center justify-center mx-auto mb-3">
+                  <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
                     <path d="M9 2L15.5 6V12L9 16L2.5 12V6L9 2Z" stroke="#2563eb" strokeWidth="1.5" strokeLinejoin="round"/>
                     <path d="M9 2V16M2.5 6L15.5 12M15.5 6L2.5 12" stroke="#2563eb" strokeWidth="1" opacity="0.5"/>
                   </svg>
                 </div>
-                <h2 className="font-display text-xl sm:text-2xl font-semibold text-navy-900 dark:text-cream-100 mb-2">
+                <h2 className="font-display text-lg sm:text-2xl font-semibold text-navy-900 dark:text-cream-100 mb-1.5">
                   Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {firstName}!
                 </h2>
-                <p className="font-body text-navy-500 dark:text-cream-400 text-sm mb-4">
+                <p className="font-body text-navy-500 dark:text-cream-400 text-sm mb-3">
                   Ask me anything. I'm connected to {connectedTools.length > 0 ? connectedTools.map(t => t.name).join(", ") : "no tools yet — add one below!"}.
                 </p>
-                <p className="font-mono text-xs text-navy-400 dark:text-cream-500 uppercase tracking-wider mb-3">Try asking...</p>
+                <p className="font-mono text-xs text-navy-400 dark:text-cream-500 uppercase tracking-wider mb-2">Try asking...</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
                   {SUGGESTED_PROMPTS.slice(0, 4).map((prompt, i) => (
                     <button key={i} onClick={() => sendMessage(prompt)}
-                      className="px-4 py-3 rounded-xl border border-navy-100 dark:border-navy-700 bg-white dark:bg-navy-800 hover:border-accent-blue/40 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all group text-left">
+                      className="px-3 py-2.5 rounded-xl border border-navy-100 dark:border-navy-700 bg-white dark:bg-navy-800 hover:border-accent-blue/40 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all group text-left">
                       <p className="font-body text-sm text-navy-700 dark:text-cream-300 leading-snug">{prompt}</p>
                       <ChevronRight size={13} className="text-navy-300 group-hover:text-accent-blue mt-1 transition-colors" />
                     </button>
