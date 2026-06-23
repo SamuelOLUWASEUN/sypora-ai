@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/lib/theme-store";
+import { useAuth } from "@/components/layout/AuthProvider";
 
 type Message      = { role: "user" | "assistant"; content: string; id: string };
 type Conversation = { id: string; title: string; created_at: string; updated_at: string };
@@ -54,10 +55,10 @@ export default function DashboardPage() {
   const router   = useRouter();
   const supabase = createClient();
   const { theme, toggleTheme, hasHydrated } = useThemeStore();
+  const { user, ready } = useAuth();
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
-  const [user, setUser]                         = useState<any>(null);
   const [messages, setMessages]                 = useState<Message[]>([]);
   const [input, setInput]                       = useState("");
   const [loading, setLoading]                   = useState(false);
@@ -73,52 +74,53 @@ export default function DashboardPage() {
   const [conversations, setConversations]       = useState<Conversation[]>([]);
   const [conversationId, setConversationId]     = useState<string | null>(null);
 
+  // Redirect if not authenticated (middleware handles this server-side too,
+  // but this is a client-side safety net)
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { router.push("/login"); return; }
-      setUser(data.user);
-      setProfileForm({
-        full_name: data.user.user_metadata?.full_name || "",
-        company:   data.user.user_metadata?.company   || "",
-        role:      data.user.user_metadata?.role      || "",
+    if (!ready) return;
+    if (!user) { router.push("/login"); return; }
+
+    setProfileForm({
+      full_name: user.user_metadata?.full_name || "",
+      company:   user.user_metadata?.company   || "",
+      role:      user.user_metadata?.role      || "",
+    });
+
+    // Load connected integrations
+    supabase
+      .from("user_integrations")
+      .select("tool_slug")
+      .eq("user_id", user.id)
+      .eq("connected", true)
+      .then(({ data: connectedIntegrations }) => {
+        if (connectedIntegrations && connectedIntegrations.length > 0) {
+          const connectedSlugs = connectedIntegrations.map((i: any) => i.tool_slug);
+          setIntegrations(prev => prev.map(i => ({
+            ...i,
+            connected: connectedSlugs.includes(i.name.toLowerCase().replace(" ", "_")) ||
+                       connectedSlugs.includes(i.name.toLowerCase()) ||
+                       connectedSlugs.includes(i.name.toLowerCase().replace(" ", "-"))
+          })));
+        }
       });
 
-      // Load connected integrations
-      const { data: connectedIntegrations } = await supabase
-        .from("user_integrations")
-        .select("tool_slug")
-        .eq("user_id", data.user.id)
-        .eq("connected", true);
+    loadConversations();
 
-      if (connectedIntegrations && connectedIntegrations.length > 0) {
-        const connectedSlugs = connectedIntegrations.map(i => i.tool_slug);
-        setIntegrations(prev => prev.map(i => ({
-          ...i,
-          connected: connectedSlugs.includes(i.name.toLowerCase().replace(" ", "_")) ||
-                     connectedSlugs.includes(i.name.toLowerCase()) ||
-                     connectedSlugs.includes(i.name.toLowerCase().replace(" ", "-"))
-        })));
-      }
-
-      // Load conversation history
-      loadConversations();
-
-      // Handle OAuth redirects
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("connected") === "notion") {
-        setIntegrations(prev => prev.map(i =>
-          i.name === "Notion" ? { ...i, connected: true } : i
-        ));
-        toast.success("Notion connected! Indexing your pages...");
-        fetch("/api/notion/index", { method: "POST" });
-        window.history.replaceState({}, "", "/dashboard");
-      }
-      if (params.get("error")) {
-        toast.error("Failed to connect. Please try again.");
-        window.history.replaceState({}, "", "/dashboard");
-      }
-    });
-  }, []);
+    // Handle OAuth redirects
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("connected") === "notion") {
+      setIntegrations(prev => prev.map(i =>
+        i.name === "Notion" ? { ...i, connected: true } : i
+      ));
+      toast.success("Notion connected! Indexing your pages...");
+      fetch("/api/notion/index", { method: "POST" });
+      window.history.replaceState({}, "", "/dashboard");
+    }
+    if (params.get("error")) {
+      toast.error("Failed to connect. Please try again.");
+      window.history.replaceState({}, "", "/dashboard");
+    }
+  }, [ready, user]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -252,10 +254,7 @@ export default function DashboardPage() {
     setSavingProfile(true);
     const { error } = await supabase.auth.updateUser({ data: profileForm });
     if (error) toast.error("Failed to save profile");
-    else {
-      toast.success("Profile saved!");
-      setUser((u: any) => ({ ...u, user_metadata: { ...u.user_metadata, ...profileForm } }));
-    }
+    else toast.success("Profile saved!");
     setSavingProfile(false);
   }
 
@@ -281,9 +280,27 @@ export default function DashboardPage() {
 
   const connectedTools = integrations.filter(i => i.connected);
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] ?? "there";
+
+  // Show nothing while auth is resolving — middleware already redirects
+  // unauthenticated users, so this is just a brief loading state
+  if (!ready) {
+    return (
+      <div className="flex items-center justify-center bg-cream-50 dark:bg-navy-950"
+        style={{ height: "100dvh" }}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-navy-900 dark:bg-accent-blue flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M9 2L15.5 6V12L9 16L2.5 12V6L9 2Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <Loader2 size={18} className="animate-spin text-navy-400" />
+        </div>
+      </div>
+    );
+  }
 return (
-    <div className="flex h-screen h-screen-dvh bg-cream-50 dark:bg-navy-950 overflow-hidden"
-      style={{ height: "100dvh" }}>
+    <div className="flex bg-cream-50 dark:bg-navy-950 overflow-hidden"
+      style={{ height: "100dvh", maxHeight: "100dvh" }}>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -482,7 +499,7 @@ return (
       </aside>
 
       {/* MAIN AREA */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
 
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-navy-100 dark:border-navy-800 bg-white dark:bg-navy-900 flex-shrink-0">
@@ -518,11 +535,11 @@ return (
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-6">
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.length === 0 && !loading && (
-              <div className="text-center py-8">
-                <div className="w-14 h-14 rounded-2xl bg-navy-50 dark:bg-navy-800 border border-navy-100 dark:border-navy-700 flex items-center justify-center mx-auto mb-5">
+              <div className="text-center py-4 sm:py-8">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-navy-50 dark:bg-navy-800 border border-navy-100 dark:border-navy-700 flex items-center justify-center mx-auto mb-4">
                   <svg width="24" height="24" viewBox="0 0 18 18" fill="none">
                     <path d="M9 2L15.5 6V12L9 16L2.5 12V6L9 2Z" stroke="#2563eb" strokeWidth="1.5" strokeLinejoin="round"/>
                     <path d="M9 2V16M2.5 6L15.5 12M15.5 6L2.5 12" stroke="#2563eb" strokeWidth="1" opacity="0.5"/>
@@ -531,16 +548,16 @@ return (
                 <h2 className="font-display text-xl sm:text-2xl font-semibold text-navy-900 dark:text-cream-100 mb-2">
                   Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {firstName}!
                 </h2>
-                <p className="font-body text-navy-500 dark:text-cream-400 text-sm mb-8">
+                <p className="font-body text-navy-500 dark:text-cream-400 text-sm mb-4">
                   Ask me anything. I'm connected to {connectedTools.length > 0 ? connectedTools.map(t => t.name).join(", ") : "no tools yet — add one below!"}.
                 </p>
-                <p className="font-mono text-xs text-navy-400 dark:text-cream-500 uppercase tracking-wider mb-4">Try asking...</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
-                  {SUGGESTED_PROMPTS.map((prompt, i) => (
+                <p className="font-mono text-xs text-navy-400 dark:text-cream-500 uppercase tracking-wider mb-3">Try asking...</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                  {SUGGESTED_PROMPTS.slice(0, 4).map((prompt, i) => (
                     <button key={i} onClick={() => sendMessage(prompt)}
                       className="px-4 py-3 rounded-xl border border-navy-100 dark:border-navy-700 bg-white dark:bg-navy-800 hover:border-accent-blue/40 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all group text-left">
                       <p className="font-body text-sm text-navy-700 dark:text-cream-300 leading-snug">{prompt}</p>
-                      <ChevronRight size={13} className="text-navy-300 group-hover:text-accent-blue mt-1.5 transition-colors" />
+                      <ChevronRight size={13} className="text-navy-300 group-hover:text-accent-blue mt-1 transition-colors" />
                     </button>
                   ))}
                 </div>
