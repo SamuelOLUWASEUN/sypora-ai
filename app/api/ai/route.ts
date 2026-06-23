@@ -4,6 +4,22 @@ import { createClient } from "@/supabase/server";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// Simple in-memory rate limiter (works without Upstash for now)
+// Replace with Upstash when UPSTASH_REDIS_REST_URL is configured
+const requestCounts = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(identifier: string, limit = 20, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const entry = requestCounts.get(identifier);
+  if (!entry || now > entry.resetAt) {
+    requestCounts.set(identifier, { count: 1, resetAt: now + windowMs });
+    return true; // allowed
+  }
+  if (entry.count >= limit) return false; // blocked
+  entry.count++;
+  return true; // allowed
+}
+
 async function searchIndexedContent(query: string, userId: string) {
   try {
     const supabase = createClient();
@@ -44,13 +60,27 @@ export async function POST(request: Request) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
+    // Auth check
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit: 20 requests per minute per user
+    const allowed = checkRateLimit(user.id);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait a moment before trying again." },
+        { status: 429 }
+      );
+    }
+
     const lastMessage = messages[messages.length - 1];
     const userQuery   = lastMessage?.content || "";
 
     let contextDocs: any[] = [];
     let contextText = "";
 
-    if (user && userQuery) {
+    if (userQuery) {
       contextDocs = await searchIndexedContent(userQuery, user.id);
       if (contextDocs.length > 0) {
         contextText = "\n\nRELEVANT CONTENT FROM YOUR CONNECTED TOOLS:\n" +
@@ -89,18 +119,9 @@ ${contextText}`;
     });
 
     const content = completion.choices[0]?.message?.content || "";
+    const sources = contextDocs.map(doc => ({ title: doc.title, url: doc.url, tool: doc.tool }));
 
-    const sources = contextDocs.map(doc => ({
-      title: doc.title,
-      url:   doc.url,
-      tool:  doc.tool,
-    }));
-
-    return NextResponse.json({
-      content,
-      sources,
-      usage: completion.usage,
-    });
+    return NextResponse.json({ content, sources, usage: completion.usage });
 
   } catch (error: any) {
     console.error("AI API error:", error);

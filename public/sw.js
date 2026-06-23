@@ -1,41 +1,30 @@
 // Sypora AI Service Worker
-// Handles caching, offline support and push notifications
+// Network-first for pages, cache-first for static assets only
 
-const CACHE_NAME = "sypora-ai-v1";
-const STATIC_CACHE = "sypora-ai-static-v1";
-
-// Assets to cache immediately on install
-const PRECACHE_ASSETS = [
-  "/",
-  "/dashboard",
-  "/offline",
-  "/manifest.json",
-];
+const CACHE_VERSION = "sypora-ai-v3";
+const STATIC_CACHE  = "sypora-ai-static-v3";
 
 // ── Install ────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn("Precache failed for some assets:", err);
-      });
-    })
-  );
+  // Skip waiting so the new SW activates immediately
   self.skipWaiting();
 });
 
 // ── Activate ───────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
+  // Delete ALL old caches so stale HTML never gets served again
   event.waitUntil(
     caches.keys().then((cacheNames) =>
       Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME && name !== STATIC_CACHE)
-          .map((name) => caches.delete(name))
+          .filter((name) => name !== CACHE_VERSION && name !== STATIC_CACHE)
+          .map((name) => {
+            console.log("[SW] Deleting old cache:", name);
+            return caches.delete(name);
+          })
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // ── Fetch Strategy ─────────────────────────────────────────────────
@@ -43,47 +32,54 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests and API routes
+  // Skip non-GET, API routes, and Next.js internals
   if (request.method !== "GET") return;
   if (url.pathname.startsWith("/api/")) return;
   if (url.pathname.startsWith("/_next/")) return;
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      // Return cached version if available
-      if (cached) return cached;
+  // Static assets (images, icons) — cache-first is fine, they're versioned
+  const isStaticAsset =
+    url.pathname.endsWith(".png") ||
+    url.pathname.endsWith(".jpg") ||
+    url.pathname.endsWith(".svg") ||
+    url.pathname.endsWith(".ico") ||
+    url.pathname.endsWith(".webp");
 
-      // Otherwise fetch from network
-      return fetch(request)
-        .then((response) => {
-          // Cache successful responses for static assets
-          if (
-            response.ok &&
-            (url.pathname.startsWith("/_next/static/") ||
-              url.pathname.endsWith(".png") ||
-              url.pathname.endsWith(".jpg") ||
-              url.pathname.endsWith(".svg") ||
-              url.pathname.endsWith(".ico"))
-          ) {
+  if (isStaticAsset) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
             const clone = response.clone();
             caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
           }
           return response;
-        })
-        .catch(() => {
-          // Offline fallback for navigation requests
-          if (request.mode === "navigate") {
-            return caches.match("/offline") || caches.match("/");
-          }
         });
-    })
+      })
+    );
+    return;
+  }
+
+  // HTML pages — ALWAYS network-first so deployments show immediately
+  // Only fall back to cache if completely offline
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        // Don't cache HTML — always get fresh from network
+        return response;
+      })
+      .catch(() => {
+        // Offline fallback only
+        return caches.match(request)
+          .then((cached) => cached || caches.match("/offline") || caches.match("/"));
+      })
   );
 });
 
 // ── Push Notifications ─────────────────────────────────────────────
 self.addEventListener("push", (event) => {
   if (!event.data) return;
-
   const data = event.data.json();
   const options = {
     body:    data.body    || "You have a new notification from Sypora AI",
@@ -94,10 +90,9 @@ self.addEventListener("push", (event) => {
     data:    { url: data.url || "/dashboard" },
     actions: [
       { action: "open",    title: "Open Sypora" },
-      { action: "dismiss", title: "Dismiss"    },
+      { action: "dismiss", title: "Dismiss"     },
     ],
   };
-
   event.waitUntil(
     self.registration.showNotification(data.title || "Sypora AI", options)
   );
@@ -106,40 +101,17 @@ self.addEventListener("push", (event) => {
 // ── Notification Click ─────────────────────────────────────────────
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-
   if (event.action === "dismiss") return;
-
   const url = event.notification.data?.url || "/dashboard";
-
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if open
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
           client.navigate(url);
           return client.focus();
         }
       }
-      // Otherwise open new window
       if (clients.openWindow) return clients.openWindow(url);
     })
   );
 });
-
-// ── Background Sync ────────────────────────────────────────────────
-self.addEventListener("sync", (event) => {
-  if (event.tag === "sync-messages") {
-    event.waitUntil(syncPendingMessages());
-  }
-});
-
-async function syncPendingMessages() {
-  // Sync any messages queued while offline
-  const cache = await caches.open(CACHE_NAME);
-  const requests = await cache.keys();
-  return Promise.all(
-    requests
-      .filter((req) => req.url.includes("/api/"))
-      .map((req) => fetch(req).then(() => cache.delete(req)))
-  );
-}
