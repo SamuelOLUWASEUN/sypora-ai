@@ -200,6 +200,9 @@ export default function DashboardPage() {
     const text = (content ?? input).trim();
     if (!text || loading) return;
     setInput("");
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
     setApiError("");
     setSidebarOpen(false);
     const userMsg: Message = { role: "user", content: text, id: Date.now().toString() };
@@ -626,7 +629,7 @@ return (
                 </div>
                 <div className="bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900 rounded-2xl rounded-tl-sm px-4 py-3 max-w-xs sm:max-w-xl">
                   <p className="font-body text-sm text-red-600 dark:text-red-400">{apiError}</p>
-                  <p className="font-body text-xs text-red-400 mt-1">Check your ANTHROPIC_API_KEY in .env.local</p>
+                  <p className="font-body text-xs text-red-400 mt-1">Check your GROQ_API_KEY in Vercel environment variables</p>
                 </div>
               </div>
             )}
@@ -637,7 +640,7 @@ return (
         </div>
 
         {/* Input */}
-        <div className="px-4 py-3 border-t border-navy-100 dark:border-navy-800 bg-white dark:bg-navy-900 flex-shrink-0">
+        <div className="px-4 py-2 sm:py-3 border-t border-navy-100 dark:border-navy-800 bg-white dark:bg-navy-900 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="flex items-end gap-2 bg-navy-50 dark:bg-navy-800 border border-navy-200 dark:border-navy-600 rounded-2xl px-3 py-2.5 focus-within:border-accent-blue focus-within:ring-2 focus-within:ring-accent-blue/20 transition-all">
               <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
@@ -652,7 +655,7 @@ return (
                 <Send size={14} />
               </button>
             </div>
-            <p className="font-body text-xs text-navy-400 text-center mt-1.5 hidden sm:block">
+            <p className="font-body text-xs text-navy-400 text-center mt-1 hidden sm:block">
               Press <kbd className="px-1 py-0.5 rounded bg-navy-100 dark:bg-navy-800 font-mono text-xs border border-navy-200 dark:border-navy-700">Enter</kbd> to send ·{" "}
               <kbd className="px-1 py-0.5 rounded bg-navy-100 dark:bg-navy-800 font-mono text-xs border border-navy-200 dark:border-navy-700">Shift+Enter</kbd> for new line
             </p>
