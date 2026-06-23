@@ -1,8 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 import { NextResponse } from "next/server";
 import { createClient } from "@/supabase/server";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 async function searchIndexedContent(query: string, userId: string) {
   try {
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
 ${hasRealData
   ? "You have access to REAL content from the user's connected tools. Use this content to give accurate, specific answers. Always cite which tool and document the information came from."
-  : "You are connected to: " + tools.join(", ") + ". No content has been indexed yet. Answer helpfully from general knowledge."
+  : "You are connected to: " + (tools.length ? tools.join(", ") : "no tools yet") + ". No content has been indexed yet. Answer helpfully from general knowledge."
 }
 
 Guidelines:
@@ -79,17 +79,16 @@ Guidelines:
 - Format with headers and bullets when appropriate
 ${contextText}`;
 
-    const response = await client.messages.create({
-      model:      "claude-sonnet-4-20250514",
+    const completion = await groq.chat.completions.create({
+      model:      "llama-3.3-70b-versatile",
       max_tokens: 1024,
-      system:     systemPrompt,
-      messages:   messages.map((m: any) => ({ role: m.role, content: m.content })),
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages.map((m: any) => ({ role: m.role, content: m.content })),
+      ],
     });
 
-    const content = response.content
-      .filter(block => block.type === "text")
-      .map(block => (block as any).text)
-      .join("");
+    const content = completion.choices[0]?.message?.content || "";
 
     const sources = contextDocs.map(doc => ({
       title: doc.title,
@@ -97,7 +96,11 @@ ${contextText}`;
       tool:  doc.tool,
     }));
 
-    return NextResponse.json({ content, sources, usage: response.usage });
+    return NextResponse.json({
+      content,
+      sources,
+      usage: completion.usage,
+    });
 
   } catch (error: any) {
     console.error("AI API error:", error);
