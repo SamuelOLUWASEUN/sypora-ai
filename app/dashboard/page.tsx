@@ -74,8 +74,18 @@ export default function DashboardPage() {
   const [conversations, setConversations]       = useState<Conversation[]>([]);
   const [conversationId, setConversationId]     = useState<string | null>(null);
 
-  // Redirect if not authenticated (middleware handles this server-side too,
-  // but this is a client-side safety net)
+  // Measure the real viewport height on mount and on resize.
+  // dvh/vh both fail on Safari iOS and Android-with-keyboard — this JS
+  // approach is the only reliable cross-browser solution.
+  useEffect(() => {
+    function setVh() {
+      const vh = window.innerHeight;
+      document.documentElement.style.setProperty("--real-vh", `${vh}px`);
+    }
+    setVh();
+    window.addEventListener("resize", setVh);
+    return () => window.removeEventListener("resize", setVh);
+  }, []);
   useEffect(() => {
     if (!ready) return;
     if (!user) { router.push("/login"); return; }
@@ -286,7 +296,7 @@ export default function DashboardPage() {
   if (!ready) {
     return (
       <div className="flex items-center justify-center bg-cream-50 dark:bg-navy-950"
-        style={{ height: "100dvh" }}>
+        style={{ height: "var(--real-vh, 100dvh)" }}>
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-navy-900 dark:bg-accent-blue flex items-center justify-center">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -300,7 +310,7 @@ export default function DashboardPage() {
   }
 return (
     <div className="flex bg-cream-50 dark:bg-navy-950 overflow-hidden"
-      style={{ height: "100dvh", maxHeight: "100dvh" }}>
+      style={{ height: "var(--real-vh, 100dvh)", maxHeight: "var(--real-vh, 100dvh)" }}>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -535,24 +545,24 @@ return (
         </div>
 
         {/* Messages */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 sm:py-6">
-          <div className="max-w-3xl mx-auto space-y-6">
-            {messages.length === 0 && !loading && (
-              <div className="text-center pt-2 pb-4 sm:py-8">
-                <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-navy-50 dark:bg-navy-800 border border-navy-100 dark:border-navy-700 flex items-center justify-center mx-auto mb-3">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4">
+          <div className="max-w-3xl mx-auto min-h-full flex flex-col">
+            {messages.length === 0 && !loading ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center py-4">
+                <div className="w-10 h-10 rounded-2xl bg-navy-50 dark:bg-navy-800 border border-navy-100 dark:border-navy-700 flex items-center justify-center mb-3">
                   <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
                     <path d="M9 2L15.5 6V12L9 16L2.5 12V6L9 2Z" stroke="#2563eb" strokeWidth="1.5" strokeLinejoin="round"/>
                     <path d="M9 2V16M2.5 6L15.5 12M15.5 6L2.5 12" stroke="#2563eb" strokeWidth="1" opacity="0.5"/>
                   </svg>
                 </div>
-                <h2 className="font-display text-lg sm:text-2xl font-semibold text-navy-900 dark:text-cream-100 mb-1.5">
+                <h2 className="font-display text-lg sm:text-2xl font-semibold text-navy-900 dark:text-cream-100 mb-1">
                   Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {firstName}!
                 </h2>
-                <p className="font-body text-navy-500 dark:text-cream-400 text-sm mb-3">
+                <p className="font-body text-navy-500 dark:text-cream-400 text-sm mb-4">
                   Ask me anything. I'm connected to {connectedTools.length > 0 ? connectedTools.map(t => t.name).join(", ") : "no tools yet — add one below!"}.
                 </p>
-                <p className="font-mono text-xs text-navy-400 dark:text-cream-500 uppercase tracking-wider mb-2">Try asking...</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                <p className="font-mono text-xs text-navy-400 dark:text-cream-500 uppercase tracking-wider mb-3">Try asking...</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left w-full">
                   {SUGGESTED_PROMPTS.slice(0, 4).map((prompt, i) => (
                     <button key={i} onClick={() => sendMessage(prompt)}
                       className="px-3 py-2.5 rounded-xl border border-navy-100 dark:border-navy-700 bg-white dark:bg-navy-800 hover:border-accent-blue/40 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all group text-left">
@@ -562,9 +572,9 @@ return (
                   ))}
                 </div>
               </div>
-            )}
-
-            {messages.map(msg => (
+            ) : (
+              <div className="py-6 space-y-6 flex-1">
+                {messages.map(msg => (
               <div key={msg.id} className={cn("flex gap-3", msg.role === "user" ? "flex-row-reverse" : "flex-row")}>
                 <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-1",
                   msg.role === "assistant" ? "bg-navy-900 dark:bg-accent-blue" : "bg-gradient-to-br from-accent-blue to-accent-indigo")}>
@@ -607,7 +617,9 @@ return (
                 </div>
               </div>
             )}
-            <div ref={bottomRef} />
+                <div ref={bottomRef} />
+              </div>
+            )}
           </div>
         </div>
 

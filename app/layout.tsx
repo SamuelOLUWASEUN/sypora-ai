@@ -9,9 +9,10 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "#fdfcf8" },
     { media: "(prefers-color-scheme: dark)",  color: "#090f28" },
   ],
-  width:        "device-width",
-  initialScale: 1,
-  maximumScale: 1,
+  width:             "device-width",
+  initialScale:      1,
+  maximumScale:      1,
+  interactiveWidget: "resizes-content",
 };
 
 export const metadata: Metadata = {
