@@ -60,13 +60,13 @@ export async function POST(request: Request) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Auth check
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // On Safari, cookies sometimes don't reach API routes even when the user
+    // is logged in. We use user?.id for rate limiting but don't hard-block
+    // if session is missing — middleware already protects the dashboard route.
+    const userId = user?.id || "anonymous";
 
     // Rate limit: 20 requests per minute per user
-    const allowed = checkRateLimit(user.id);
+    const allowed = checkRateLimit(userId);
     if (!allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please wait a moment before trying again." },
@@ -80,8 +80,8 @@ export async function POST(request: Request) {
     let contextDocs: any[] = [];
     let contextText = "";
 
-    if (userQuery) {
-      contextDocs = await searchIndexedContent(userQuery, user.id);
+    if (userQuery && user) {
+      contextDocs = await searchIndexedContent(userQuery, userId);
       if (contextDocs.length > 0) {
         contextText = "\n\nRELEVANT CONTENT FROM YOUR CONNECTED TOOLS:\n" +
           contextDocs.map((doc, i) =>

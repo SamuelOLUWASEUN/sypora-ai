@@ -75,25 +75,30 @@ export default function DashboardPage() {
   const [conversationId, setConversationId]     = useState<string | null>(null);
 
   // Measure the real viewport height on mount and on resize.
-  // dvh/vh both fail on Safari iOS and Android-with-keyboard — this JS
-  // approach is the only reliable cross-browser solution.
-  // visualViewport API handles keyboard open/close on older Android (S9 etc).
+  // On iOS Safari we skip visualViewport keyboard events — Safari handles
+  // keyboard scroll natively and our resize causes a layout jump instead.
   useEffect(() => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
     function setVh() {
       const vp = (window as any).visualViewport;
       const vh = vp ? vp.height : window.innerHeight;
       document.documentElement.style.setProperty("--real-vh", `${vh}px`);
     }
+
     setVh();
     window.addEventListener("resize", setVh);
+
+    // Only use visualViewport for non-iOS (Android keyboard handling)
     const vp = (window as any).visualViewport;
-    if (vp) {
+    if (vp && !isIOS) {
       vp.addEventListener("resize", setVh);
       vp.addEventListener("scroll", setVh);
     }
+
     return () => {
       window.removeEventListener("resize", setVh);
-      if (vp) {
+      if (vp && !isIOS) {
         vp.removeEventListener("resize", setVh);
         vp.removeEventListener("scroll", setVh);
       }
