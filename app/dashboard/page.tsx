@@ -77,14 +77,27 @@ export default function DashboardPage() {
   // Measure the real viewport height on mount and on resize.
   // dvh/vh both fail on Safari iOS and Android-with-keyboard — this JS
   // approach is the only reliable cross-browser solution.
+  // visualViewport API handles keyboard open/close on older Android (S9 etc).
   useEffect(() => {
     function setVh() {
-      const vh = window.innerHeight;
+      const vp = (window as any).visualViewport;
+      const vh = vp ? vp.height : window.innerHeight;
       document.documentElement.style.setProperty("--real-vh", `${vh}px`);
     }
     setVh();
     window.addEventListener("resize", setVh);
-    return () => window.removeEventListener("resize", setVh);
+    const vp = (window as any).visualViewport;
+    if (vp) {
+      vp.addEventListener("resize", setVh);
+      vp.addEventListener("scroll", setVh);
+    }
+    return () => {
+      window.removeEventListener("resize", setVh);
+      if (vp) {
+        vp.removeEventListener("resize", setVh);
+        vp.removeEventListener("scroll", setVh);
+      }
+    };
   }, []);
   useEffect(() => {
     if (!ready) return;
